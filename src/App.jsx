@@ -12,7 +12,7 @@ import {
 } from 'firebase/firestore';
 import { 
   Plus, Trash2, LayoutGrid, Package, LogOut, 
-  Lock, Users, UserPlus, CheckCircle, XCircle, Eye, EyeOff
+  Lock, Users, UserPlus, CheckCircle, XCircle 
 } from 'lucide-react';
 
 import { Notify } from 'notiflix/build/notiflix-notify-aio';
@@ -28,9 +28,8 @@ Notify.init({
 });
 
 function App() {
+  const [activeTab, setActiveTab] = useState(localStorage.getItem('activeTab') || 'katalog');
   const [user, setUser] = useState(null);
-  const [activeTab, setActiveTab] = useState('katalog');
-  const [loading, setLoading] = useState(false);
   
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPass, setLoginPass] = useState('');
@@ -41,6 +40,10 @@ function App() {
   const [allUsers, setAllUsers] = useState([]);
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPass, setNewUserPass] = useState('');
+
+  useEffect(() => {
+    localStorage.setItem('activeTab', activeTab);
+  }, [activeTab]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -131,19 +134,16 @@ function App() {
     Loading.standard('Mendaftarkan User...');
     try {
       await createUserWithEmailAndPassword(auth, newUserEmail, newUserPass);
-      
       await setDoc(doc(db, "users", newUserEmail), {
         email: newUserEmail,
         status: 'active',
         role: 'staff',
         createdAt: new Date()
       });
-
       Loading.remove();
       Notify.success(`User ${newUserEmail} Berhasil Dibuat!`);
       setNewUserEmail('');
       setNewUserPass('');
-    
     } catch (err) {
       Loading.remove();
       Notify.failure("Gagal: " + err.message);
@@ -153,7 +153,22 @@ function App() {
   const toggleUserStatus = async (email, currentStatus) => {
     const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
     await updateDoc(doc(db, "users", email), { status: newStatus });
-    Notify.info(`Status ${email} diubah menjadi ${newStatus}`);
+    Notify.info(`Status ${email} menjadi ${newStatus}`);
+  };
+
+  const deleteUser = (email) => {
+    Confirm.show(
+      'Hapus Pengelola',
+      `Hapus akses untuk ${email}? Staf ini tidak akan bisa login lagi.`,
+      'Ya, Hapus',
+      'Batal',
+      async () => {
+        await deleteDoc(doc(db, "users", email));
+        Notify.info("Akses user telah dihapus");
+      },
+      () => {},
+      { okButtonBackground: '#ef4444' }
+    );
   };
 
   if (!user) {
@@ -168,14 +183,8 @@ function App() {
             <p className="text-stone-400 font-medium mt-2">Login untuk kelola katalog produk</p>
           </div>
           <form onSubmit={handleLogin} className="space-y-5">
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-stone-500 ml-2 uppercase tracking-widest">Email Address</label>
-              <input type="email" placeholder="admin@maktika.com" className="w-full p-4 bg-stone-50 rounded-2xl outline-none border border-stone-100 focus:ring-4 ring-orange-50 transition" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-stone-500 ml-2 uppercase tracking-widest">Password</label>
-              <input type="password" placeholder="••••••••" className="w-full p-4 bg-stone-50 rounded-2xl outline-none border border-stone-100 focus:ring-4 ring-orange-50 transition" value={loginPass} onChange={e => setLoginPass(e.target.value)} required />
-            </div>
+            <input type="email" placeholder="Email" className="w-full p-4 bg-stone-50 rounded-2xl outline-none border border-stone-100 focus:ring-4 ring-orange-50 transition" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} required />
+            <input type="password" placeholder="Password" className="w-full p-4 bg-stone-50 rounded-2xl outline-none border border-stone-100 focus:ring-4 ring-orange-50 transition" value={loginPass} onChange={e => setLoginPass(e.target.value)} required />
             <button className="w-full bg-orange-500 text-white p-5 rounded-3xl font-black text-lg hover:bg-orange-600 shadow-xl shadow-orange-100 transition-all active:scale-95">Masuk Sekarang</button>
           </form>
         </div>
@@ -192,7 +201,7 @@ function App() {
               <div className="bg-orange-500 p-2 rounded-xl text-white shadow-lg shadow-orange-200">
                 <Package size={24} />
               </div>
-              <span className="font-black text-2xl tracking-tighter hidden sm:block italic">Admin MakTika.</span>
+              <span className="font-black text-2xl tracking-tighter hidden sm:block italic">Admin MakTika</span>
             </div>
             <div className="flex bg-stone-100 p-1 rounded-2xl">
               <button onClick={() => setActiveTab('katalog')} className={`px-6 py-2.5 rounded-xl text-sm font-black transition-all ${activeTab === 'katalog' ? 'bg-white text-orange-600 shadow-sm' : 'text-stone-400 hover:text-stone-600'}`}>KATALOG</button>
@@ -216,7 +225,7 @@ function App() {
                 <form onSubmit={handleAddProduct} className="space-y-5">
                   <input type="text" placeholder="Nama Snack" required className="w-full p-4 bg-stone-50 border border-stone-100 rounded-2xl outline-none focus:ring-4 ring-orange-50 transition" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
                   <input type="number" placeholder="Harga (Rp)" required className="w-full p-4 bg-stone-50 border border-stone-100 rounded-2xl outline-none focus:ring-4 ring-orange-50 transition" value={form.price} onChange={e => setForm({...form, price: e.target.value})} />
-                  <textarea placeholder="Deskripsi Gurih..." className="w-full p-4 bg-stone-50 border border-stone-100 rounded-2xl outline-none focus:ring-4 ring-orange-50 transition" rows="3" value={form.desc} onChange={e => setForm({...form, desc: e.target.value})} />
+                  <textarea placeholder="Deskripsi..." className="w-full p-4 bg-stone-50 border border-stone-100 rounded-2xl outline-none focus:ring-4 ring-orange-50 transition" rows="3" value={form.desc} onChange={e => setForm({...form, desc: e.target.value})} />
                   <input type="text" placeholder="URL Gambar Produk" required className="w-full p-4 bg-stone-50 border border-stone-100 rounded-2xl outline-none focus:ring-4 ring-orange-50 transition" value={form.imageUrl} onChange={e => setForm({...form, imageUrl: e.target.value})} />
                   <button className="w-full bg-stone-900 text-white p-5 rounded-3xl font-black hover:bg-black shadow-2xl transition-all active:scale-95">SIMPAN KATALOG</button>
                 </form>
@@ -226,7 +235,7 @@ function App() {
             <div className="lg:col-span-8">
               <div className="flex items-center justify-between mb-8">
                 <h2 className="text-2xl font-black flex items-center gap-3 tracking-tight">
-                  <LayoutGrid size={24} className="text-orange-500" /> Daftar Menu Aktif
+                  <LayoutGrid size={24} className="text-orange-500" /> Daftar Menu
                 </h2>
                 <span className="px-4 py-2 bg-white rounded-full text-xs font-black text-stone-400 border border-stone-100 shadow-sm">{products.length} ITEM</span>
               </div>
@@ -272,9 +281,14 @@ function App() {
                       <p className={`text-[10px] font-black uppercase tracking-[0.2em] mt-1 ${u.status === 'active' ? 'text-green-500' : 'text-red-400'}`}>{u.status}</p>
                     </div>
                   </div>
-                  <button onClick={() => toggleUserStatus(u.email, u.status)} className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-xs font-black transition-all ${u.status === 'active' ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-green-50 text-green-500 hover:bg-green-100'}`}>
-                    {u.status === 'active' ? <><XCircle size={16}/> NONAKTIFKAN</> : <><CheckCircle size={16}/> AKTIFKAN</>}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => toggleUserStatus(u.email, u.status)} className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-black transition-all ${u.status === 'active' ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-green-50 text-green-500 hover:bg-green-100'}`}>
+                      {u.status === 'active' ? <><XCircle size={16}/> NONAKTIFKAN</> : <><CheckCircle size={16}/> AKTIFKAN</>}
+                    </button>
+                    <button onClick={() => deleteUser(u.email)} className="p-3 text-stone-200 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all shadow-sm">
+                      <Trash2 size={20} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
