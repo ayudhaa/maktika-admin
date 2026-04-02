@@ -13,35 +13,38 @@ import {
   Plus, Trash2, LayoutGrid, Package, LogOut, 
   Lock, Users, UserPlus, CheckCircle, XCircle 
 } from 'lucide-react';
+import { Notify } from 'notiflix/build/notiflix-notify-aio';
+import { Confirm } from 'notiflix/build/notiflix-confirm-aio';
+import { Loading } from 'notiflix/build/notiflix-loading-aio';
+
+Notify.init({
+  width: '300px',
+  position: 'right-top',
+  borderRadius: '15px',
+  fontFamily: 'Quicksand',
+  success: { background: '#f97316' },
+});
 
 function App() {
-  // Auth State
   const [user, setUser] = useState(null);
-  const [activeTab, setActiveTab] = useState('katalog'); // 'katalog' atau 'users'
-  
-  // Login State
+  const [activeTab, setActiveTab] = useState('katalog');
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPass, setLoginPass] = useState('');
-  
-  // Katalog State
   const [products, setProducts] = useState([]);
   const [form, setForm] = useState({ name: '', price: '', desc: '', imageUrl: '' });
-  const [loading, setLoading] = useState(false);
-
-  // User Management State
   const [allUsers, setAllUsers] = useState([]);
   const [newUserEmail, setNewUserEmail] = useState('');
 
-  // 1. Cek Status Login & Izin Akses (Active/Inactive)
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         const userDoc = await getDoc(doc(db, "users", currentUser.email));
         if (userDoc.exists() && userDoc.data().status === 'active') {
           setUser(currentUser);
+          Notify.success(`Selamat Datang, ${currentUser.email}`);
         } else {
           await signOut(auth);
-          alert("Akun Anda dinonaktifkan atau tidak terdaftar!");
+          Notify.failure("Akun Anda Nonaktif!");
         }
       } else {
         setUser(null);
@@ -50,37 +53,34 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // 2. Load Data (Katalog & Daftar User)
   useEffect(() => {
     if (user) {
-      // Load Katalog
       const qProd = query(collection(db, "products"), orderBy("createdAt", "desc"));
       const unsubProd = onSnapshot(qProd, (snapshot) => {
         setProducts(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
       });
-
-      // Load Daftar User
       const unsubUser = onSnapshot(collection(db, "users"), (snapshot) => {
         setAllUsers(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
       });
-
       return () => { unsubProd(); unsubUser(); };
     }
   }, [user]);
 
-  // --- Handlers ---
   const handleLogin = async (e) => {
     e.preventDefault();
+    Loading.circle();
     try {
       await signInWithEmailAndPassword(auth, loginEmail, loginPass);
+      Loading.remove();
     } catch (err) {
-      alert("Gagal Login: " + err.message);
+      Loading.remove();
+      Notify.failure("Gagal Login: Email atau Password Salah");
     }
   };
 
   const handleAddProduct = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    Loading.pulse('Menyimpan data...');
     try {
       await addDoc(collection(db, "products"), {
         ...form,
@@ -88,15 +88,30 @@ function App() {
         createdAt: new Date()
       });
       setForm({ name: '', price: '', desc: '', imageUrl: '' });
-      alert("Katalog Berhasil Ditambah!");
-    } catch (err) { alert("Error: " + err.message); }
-    setLoading(false);
+      Loading.remove();
+      Notify.success("Katalog Berhasil Ditambahkan!");
+    } catch (err) { 
+      Loading.remove();
+      Notify.failure("Gagal Simpan: " + err.message); 
+    }
   };
 
-  const deleteProduct = async (id) => {
-    if (window.confirm("Hapus menu ini dari katalog?")) {
-      await deleteDoc(doc(db, "products", id));
-    }
+  const deleteProduct = (id) => {
+    Confirm.show(
+      'Hapus Produk',
+      'Apakah Anda yakin ingin menghapus menu ini dari katalog ?',
+      'Ya, Hapus',
+      'Batal',
+      async () => {
+        await deleteDoc(doc(db, "products", id));
+        Notify.info("Produk telah dihapus");
+      },
+      () => {},
+      {
+        okButtonBackground: '#ef4444',
+        titleColor: '#1e293b',
+      }
+    );
   };
 
   const handleAddUser = async (e) => {
@@ -107,17 +122,17 @@ function App() {
         status: 'active',
         role: 'staff'
       });
-      alert("User " + newUserEmail + " berhasil didaftarkan!");
+      Notify.success("Akses Berhasil Diberikan!");
       setNewUserEmail('');
-    } catch (err) { alert(err.message); }
+    } catch (err) { Notify.failure("Error: " + err.message); }
   };
 
   const toggleUserStatus = async (email, currentStatus) => {
     const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
     await updateDoc(doc(db, "users", email), { status: newStatus });
+    Notify.info(`User ${email} sekarang ${newStatus}`);
   };
 
-  // --- VIEW: HALAMAN LOGIN ---
   if (!user) {
     return (
       <div className="min-h-screen bg-[#FFFBF2] flex items-center justify-center p-4">
@@ -130,8 +145,8 @@ function App() {
             <p className="text-stone-400 text-sm mt-1">Gunakan akses admin untuk mengelola</p>
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
-            <input type="email" placeholder="Email" className="w-full p-4 bg-stone-50 rounded-2xl outline-none border border-stone-100 focus:ring-2 ring-orange-200 transition" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} required />
-            <input type="password" placeholder="Password" className="w-full p-4 bg-stone-50 rounded-2xl outline-none border border-stone-100 focus:ring-2 ring-orange-200 transition" value={loginPass} onChange={e => setLoginPass(e.target.value)} required />
+            <input type="email" placeholder="Email" className="w-full p-4 bg-stone-50 rounded-2xl outline-none border border-stone-100 focus:ring-2 ring-orange-200" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} required />
+            <input type="password" placeholder="Password" className="w-full p-4 bg-stone-50 rounded-2xl outline-none border border-stone-100 focus:ring-2 ring-orange-200" value={loginPass} onChange={e => setLoginPass(e.target.value)} required />
             <button className="w-full bg-orange-500 text-white p-4 rounded-2xl font-bold hover:bg-orange-600 shadow-lg shadow-orange-100 transition-all active:scale-95">Masuk Sekarang</button>
           </form>
         </div>
@@ -139,7 +154,6 @@ function App() {
     );
   }
 
-  // --- VIEW: DASHBOARD UTAMA ---
   return (
     <div className="min-h-screen bg-[#FFFBF2] text-stone-800 font-sans pb-20">
       <nav className="bg-white border-b border-stone-200 sticky top-0 z-20 shadow-sm">
@@ -156,7 +170,10 @@ function App() {
               <button onClick={() => setActiveTab('users')} className={`px-4 py-2 rounded-xl text-sm font-bold transition ${activeTab === 'users' ? 'bg-orange-50 text-orange-600' : 'text-stone-400'}`}>Kelola User</button>
             </div>
           </div>
-          <button onClick={() => signOut(auth)} className="flex items-center gap-2 text-stone-400 hover:text-red-500 font-bold text-sm transition">
+          <button onClick={() => {
+            signOut(auth);
+            Notify.info("Anda telah keluar");
+          }} className="flex items-center gap-2 text-stone-400 hover:text-red-500 font-bold text-sm transition">
             <LogOut size={18} /> <span className="hidden sm:inline">Keluar</span>
           </button>
         </div>
@@ -164,7 +181,6 @@ function App() {
 
       <main className="max-w-6xl mx-auto px-4 mt-8">
         {activeTab === 'katalog' ? (
-          /* TAB KATALOG */
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div className="lg:col-span-4">
               <div className="bg-white rounded-3xl p-6 shadow-md border border-stone-100 lg:sticky lg:top-24">
@@ -173,12 +189,10 @@ function App() {
                 </h2>
                 <form onSubmit={handleAddProduct} className="space-y-4">
                   <input type="text" placeholder="Nama Snack" required className="w-full p-3 bg-stone-50 border border-stone-100 rounded-2xl outline-none focus:ring-2 ring-orange-200 transition" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
-                  <input type="number" placeholder="Harga (Contoh: 25000)" required className="w-full p-3 bg-stone-50 border border-stone-100 rounded-2xl outline-none focus:ring-2 ring-orange-200 transition" value={form.price} onChange={e => setForm({...form, price: e.target.value})} />
+                  <input type="number" placeholder="Harga" required className="w-full p-3 bg-stone-50 border border-stone-100 rounded-2xl outline-none focus:ring-2 ring-orange-200 transition" value={form.price} onChange={e => setForm({...form, price: e.target.value})} />
                   <textarea placeholder="Deskripsi Singkat..." className="w-full p-3 bg-stone-50 border border-stone-100 rounded-2xl outline-none focus:ring-2 ring-orange-200 transition" rows="3" value={form.desc} onChange={e => setForm({...form, desc: e.target.value})} />
                   <input type="text" placeholder="URL Link Gambar" required className="w-full p-3 bg-stone-50 border border-stone-100 rounded-2xl outline-none focus:ring-2 ring-orange-200 transition" value={form.imageUrl} onChange={e => setForm({...form, imageUrl: e.target.value})} />
-                  <button disabled={loading} className="w-full bg-orange-500 text-white p-4 rounded-2xl font-bold hover:bg-orange-600 shadow-lg shadow-orange-100 transition-all disabled:bg-stone-300">
-                    {loading ? "Memproses..." : "Simpan ke Katalog"}
-                  </button>
+                  <button className="w-full bg-orange-500 text-white p-4 rounded-2xl font-bold hover:bg-orange-600 shadow-lg shadow-orange-100 transition-all">Simpan ke Katalog</button>
                 </form>
               </div>
             </div>
@@ -207,14 +221,13 @@ function App() {
             </div>
           </div>
         ) : (
-          /* TAB KELOLA USER */
           <div className="max-w-2xl mx-auto">
             <div className="bg-white rounded-[40px] p-8 shadow-md border border-stone-100 mb-8">
               <h2 className="text-lg font-bold mb-6 flex items-center gap-2">
                 <UserPlus size={22} className="text-orange-500" /> Izinkan Akses User Baru
               </h2>
               <form onSubmit={handleAddUser} className="flex flex-col sm:flex-row gap-3">
-                <input type="email" placeholder="Email User (Contoh: staf@gmail.com)" required className="flex-1 p-4 bg-stone-50 border border-stone-100 rounded-2xl outline-none focus:ring-2 ring-orange-200 transition" value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} />
+                <input type="email" placeholder="Email User" required className="flex-1 p-4 bg-stone-50 border border-stone-100 rounded-2xl outline-none focus:ring-2 ring-orange-200 transition" value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} />
                 <button className="bg-orange-500 text-white px-8 py-4 rounded-2xl font-bold hover:bg-orange-600 shadow-lg shadow-orange-100 transition-all">Izinkan</button>
               </form>
             </div>
